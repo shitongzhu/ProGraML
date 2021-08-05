@@ -46,6 +46,7 @@ DEFINE_string(path, "/tmp/programl/poj104", "The directory to write generated fi
 
 int main(int argc, char** argv) {
   labm8::InitApp(&argc, &argv);
+
   if (argc > 1) {
     std::cerr << "fatal: Unrecognized arguments" << std::endl;
     return 4;

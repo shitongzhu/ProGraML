@@ -43,6 +43,7 @@
 #include "programl/util/filesystem_cache.h"
 #include "subprocess/subprocess.hpp"
 #include "tbb/parallel_for.h"
+#include "tbb/task_scheduler_init.h"
 
 using labm8::Status;
 namespace fs = boost::filesystem;
@@ -96,6 +97,9 @@ Status ProcessSourceFile(const fs::path& root, const fs::path& path, const fs::p
   string src = labm8::StripNonUtf8(fileContents);
   PreprocessSrc(&src);
 
+  LOG(INFO) << path.string();
+  LOG(INFO) << outpath.string();
+
   const string relpath = path.string().substr(root.string().size() + 1);
 
   // Files are organized by label.
@@ -118,16 +122,17 @@ Status ProcessSourceFile(const fs::path& root, const fs::path& path, const fs::p
   {
     std::ofstream irsOut(
         absl::StrFormat("%s/ir/%s.%d.IrList.pb", outpath.string(), stringLabel, srcId));
+    LOG(INFO) << "Processing LLVM IR List file: " << absl::StrFormat("%s/ir/%s.%d.IrList.pb", outpath.string(), stringLabel, srcId);
     irs.SerializeToOstream(&irsOut);
   }
 
   for (int i = 0; i < irs.ir_size(); ++i) {
     std::ofstream irOut(
         absl::StrFormat("%s/ir/%s.%d.%d.ll", outpath.string(), stringLabel, srcId, i));
-    irOut << irs.ir(i).text();
 
     // Add program label.
     ProgramGraph graph;
+    LOG(INFO) << "Processing LLVM IR file: " << absl::StrFormat("%s/ir/%s.%d.%d.ll", outpath.string(), stringLabel, srcId, i);
     RETURN_IF_ERROR(ir::llvm::BuildProgramGraph(irs.ir(i).text(), &graph));
     Feature feature;
     feature.mutable_int64_list()->add_value(label);
@@ -276,9 +281,12 @@ size_t CreatePoj104Dataset(const string& url, const fs::path& outputPath) {
   LOG(INFO) << "Processing " << totalFiles << " files ...";
 
   std::atomic_uint64_t fileCount{0};
+  tbb::task_scheduler_init init(1);
   tbb::parallel_for(
       tbb::blocked_range<size_t>(0, files.size()), [&](const tbb::blocked_range<size_t>& r) {
         for (size_t index = r.begin(); index != r.end(); ++index) {
+	  if (index <= r.begin() + 15)
+	    continue;
           ProcessSourceFile(root, files[index], outputPath, index);
           ++fileCount;
           uint64_t f = fileCount;

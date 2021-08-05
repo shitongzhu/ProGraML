@@ -11,8 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <iostream>
+
 #include "programl/ir/llvm/llvm.h"
 
+#include "labm8/cpp/logging.h"
 #include "labm8/cpp/status.h"
 #include "labm8/cpp/status_macros.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -70,6 +73,7 @@ Status BuildProgramGraph(const ::llvm::MemoryBuffer& irBuffer, ProgramGraph* gra
 Status BuildProgramGraph(const string& irString, ProgramGraph* graph,
                          const ProgramGraphOptions& options) {
   const auto irBuffer = ::llvm::MemoryBuffer::getMemBuffer(irString);
+  LOG(INFO) << irString;
   return BuildProgramGraph(*irBuffer, graph, options);
 }
 
