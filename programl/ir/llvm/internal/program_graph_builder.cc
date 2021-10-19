@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "programl/ir/llvm/internal/program_graph_builder.h"
-
+// @NeuSE
 #include <deque>
 #include <vector>
 
@@ -27,6 +27,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "programl/ir/llvm/internal/klee_llvm_lib/llvm_ops.h"
 #if PROGRAML_LLVM_VERSION_MAJOR > 3
 #include "llvm/IR/ProfileSummary.h"
 #endif
@@ -309,6 +310,10 @@ Node* ProgramGraphBuilder::AddLlvmInstruction(const ::llvm::Instruction* instruc
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.text);
 
+  // @NeuSE
+  std::string id_string = inst_to_strID(instruction);
+  graph::AddScalarFeature(node, "id_string", id_string);
+
 #if PROGRAML_LLVM_VERSION_MAJOR > 3
   // Add profiling information features, if available.
   uint64_t profTotalWeight;
@@ -332,7 +337,6 @@ Node* ProgramGraphBuilder::AddLlvmVariable(const ::llvm::Instruction* operand,
   Node* node = AddVariable(text.lhs_type, function);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.lhs);
-
   return node;
 }
 
@@ -342,7 +346,6 @@ Node* ProgramGraphBuilder::AddLlvmVariable(const ::llvm::Argument* argument,
   Node* node = AddVariable(text.lhs_type, function);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.lhs);
-
   return node;
 }
 
@@ -351,7 +354,6 @@ Node* ProgramGraphBuilder::AddLlvmConstant(const ::llvm::Constant* constant) {
   Node* node = AddConstant(text.lhs_type);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.text);
-
   return node;
 }
 

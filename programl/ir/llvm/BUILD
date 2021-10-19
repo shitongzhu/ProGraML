@@ -76,8 +76,8 @@ py_library(
 
 cc_library(
     name = "llvm-3.8",
-    srcs = ["llvm.cc"] + glob(["internal/*.cc"]),
-    hdrs = ["llvm.h"] + glob(["internal/*.h"]),
+    srcs = ["llvm.cc"] + glob(["internal/*.cc"]) + glob(["internal/klee_llvm_lib/*.cc"]),
+    hdrs = ["llvm.h"] + glob(["internal/*.h"]) + glob(["internal/klee_llvm_lib/*.h"]),
     copts = [
         "-std=c++14",
         "-fno-rtti",
@@ -103,8 +103,8 @@ cc_library(
 
 cc_library(
     name = "llvm-6",
-    srcs = ["llvm.cc"] + glob(["internal/*.cc"]),
-    hdrs = ["llvm.h"] + glob(["internal/*.h"]),
+    srcs = ["llvm.cc"] + glob(["internal/*.cc"]) + glob(["internal/klee_llvm_lib/*.cc"]),
+    hdrs = ["llvm.h"] + glob(["internal/*.h"]) + glob(["internal/klee_llvm_lib/*.h"]),
     copts = [
         "-std=c++14",
         "-fno-rtti",
@@ -130,8 +130,8 @@ cc_library(
 
 cc_library(
     name = "llvm-10",
-    srcs = ["llvm.cc"] + glob(["internal/*.cc"]),
-    hdrs = ["llvm.h"] + glob(["internal/*.h"]),
+    srcs = ["llvm.cc"] + glob(["internal/*.cc"]) + glob(["internal/klee_llvm_lib/*.cc"]),
+    hdrs = ["llvm.h"] + glob(["internal/*.h"]) + glob(["internal/klee_llvm_lib/*.h"]),
     copts = [
         "-std=c++14",
         "-fno-rtti",
