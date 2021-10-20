@@ -57,8 +57,10 @@ using DataEdge = std::pair<const ::llvm::Instruction*, Node*>;
 // A map from instructions to their node.
 using InstructionMap = absl::flat_hash_map<const ::llvm::Instruction*, Node*>;
 
+// @NeuSE: Add instructionId field
 using ArgumentConsumerMap =
-    absl::flat_hash_map<const ::llvm::Argument*, std::vector<PositionalNode>>;
+    absl::flat_hash_map<const ::llvm::Argument*,
+                        std::pair<std::string, std::vector<PositionalNode>>>;
 
 // A specialized program graph builder for LLVM-IR.
 class ProgramGraphBuilder : public programl::graph::ProgramGraphBuilder {
@@ -81,10 +83,14 @@ class ProgramGraphBuilder : public programl::graph::ProgramGraphBuilder {
 
   [[nodiscard]] labm8::Status AddCallSite(const Node* source, const FunctionEntryExits& target);
 
-  Node* AddLlvmInstruction(const ::llvm::Instruction* instruction, const Function* function);
-  Node* AddLlvmVariable(const ::llvm::Instruction* operand, const Function* function);
-  Node* AddLlvmVariable(const ::llvm::Argument* argument, const Function* function);
-  Node* AddLlvmConstant(const ::llvm::Constant* constant);
+  // NeuSE: Add instructionId for mapping associated instructions to records in KLEE results
+  Node* AddLlvmInstruction(const ::llvm::Instruction* instruction, const Function* function,
+                           std::string instructionId);
+  Node* AddLlvmVariable(const ::llvm::Instruction* operand, const Function* function,
+                        std::string instructionId);
+  Node* AddLlvmVariable(const ::llvm::Argument* argument, const Function* function,
+                        std::string instructionId);
+  Node* AddLlvmConstant(const ::llvm::Constant* constant, std::string instructionId);
 
  private:
   TextEncoder textEncoder_;
@@ -98,7 +104,9 @@ class ProgramGraphBuilder : public programl::graph::ProgramGraphBuilder {
   // A map from constant values to <node, position> uses. This map is
   // populated by VisitBasicBlock() and consumed once all functions have been
   // visited.
-  absl::flat_hash_map<const ::llvm::Constant*, std::vector<PositionalNode>> constants_;
+  // @NeuSE: Add instructionId field
+  absl::flat_hash_map<const ::llvm::Constant*, std::pair<std::string, std::vector<PositionalNode>>>
+      constants_;
 };
 
 }  // namespace internal

@@ -14,9 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "programl/ir/llvm/internal/program_graph_builder.h"
-// @NeuSE
+
 #include <deque>
 #include <vector>
+
+// @NeuSE
+#include <tuple>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -56,8 +59,11 @@ labm8::StatusOr<BasicBlockEntryExit> ProgramGraphBuilder::VisitBasicBlock(
   for (const ::llvm::Instruction& instruction : block) {
     const LlvmTextComponents text = textEncoder_.Encode(&instruction);
 
+    // @NeuSE: Get the instruction ID (for matching merge records)
+    std::string instructionId = inst_to_strID(&instruction);
+
     // Create the graph node for the instruction.
-    auto instructionMessage = AddLlvmInstruction(&instruction, functionMessage);
+    auto instructionMessage = AddLlvmInstruction(&instruction, functionMessage, instructionId);
 
     // Record the instruction in the function-level instructions map.
     instructions->insert({&instruction, instructionMessage});
@@ -97,7 +103,13 @@ labm8::StatusOr<BasicBlockEntryExit> ProgramGraphBuilder::VisitBasicBlock(
         // If the operand is a constant value, insert a new entry into the map
         // of constants to node IDs and positions. We defer creating the
         // immediate nodes until we have traversed all
-        constants_[constant].push_back({instructionMessage, position});
+        // @NeuSE: Add instructionId to graph node annotation
+        if (constants_.contains(constant)) {
+          constants_[constant].second.push_back({instructionMessage, position});
+        } else {
+          std::vector<PositionalNode> positionalNodes = {{instructionMessage, position}};
+          constants_[constant] = {instructionId, positionalNodes};
+        }
       } else if (const auto* operand = ::llvm::dyn_cast<::llvm::Instruction>(value)) {
         if (options().instructions_only()) {
           continue;
@@ -123,7 +135,8 @@ labm8::StatusOr<BasicBlockEntryExit> ProgramGraphBuilder::VisitBasicBlock(
         // To this we create the intermediate data flow node '%2' immediately,
         // but defer adding the edge from the producer instruction, since we may
         // not have visited it yet.
-        Node* variable = AddLlvmVariable(operand, functionMessage);
+        // @NeuSE: Add associated llvm::Instruction for operands
+        Node* variable = AddLlvmVariable(operand, functionMessage, instructionId);
 
         // Connect the data -> consumer.
         RETURN_IF_ERROR(AddDataEdge(position, variable, instructionMessage).status());
@@ -134,7 +147,13 @@ labm8::StatusOr<BasicBlockEntryExit> ProgramGraphBuilder::VisitBasicBlock(
         if (options().instructions_only()) {
           continue;
         }
-        (*argumentConsumers)[operand].push_back({instructionMessage, position});
+        // @NeuSE: Add instructionId to graph node annotation
+        if ((*argumentConsumers).contains(operand)) {
+          (*argumentConsumers)[operand].second.push_back({instructionMessage, position});
+        } else {
+          std::vector<PositionalNode> positionalNodes = {{instructionMessage, position}};
+          (*argumentConsumers)[operand] = {instructionId, positionalNodes};
+        }
       } else if (!(
                      // Basic blocks are not considered data. There will instead
                      // be a control edge from this instruction to the entry
@@ -188,6 +207,10 @@ labm8::StatusOr<FunctionEntryExits> ProgramGraphBuilder::VisitFunction(
   if (function.isDeclaration()) {
     Node* node = AddInstruction("; undefined function", functionMessage);
     graph::AddScalarFeature(node, "full_text", "");
+
+    // @NeuSE: Add dummy annotation to indicate this is the function entry
+    graph::AddScalarFeature(node, "function_entry", "");
+
     functionEntryExits.first = node;
     functionEntryExits.second.push_back(node);
     return functionEntryExits;
@@ -208,9 +231,10 @@ labm8::StatusOr<FunctionEntryExits> ProgramGraphBuilder::VisitFunction(
 
   // Construct the identifier data elements for arguments and connect data
   // edges.
+  // @NeuSE: Add instructionId to graph node
   for (auto it : argumentConsumers) {
-    Node* argument = AddLlvmVariable(it.first, functionMessage);
-    for (auto argumentConsumer : it.second) {
+    Node* argument = AddLlvmVariable(it.first, functionMessage, it.second.first);
+    for (auto argumentConsumer : it.second.second) {
       Node* argumentConsumerNode = argumentConsumer.first;
       int32_t position = argumentConsumer.second;
       RETURN_IF_ERROR(AddDataEdge(position, argument, argumentConsumerNode).status());
@@ -304,15 +328,15 @@ Status ProgramGraphBuilder::AddCallSite(const Node* source, const FunctionEntryE
 }
 
 Node* ProgramGraphBuilder::AddLlvmInstruction(const ::llvm::Instruction* instruction,
-                                              const Function* function) {
+                                              const Function* function,
+                                              const std::string instructionId) {
   const LlvmTextComponents text = textEncoder_.Encode(instruction);
   Node* node = AddInstruction(text.opcode_name, function);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.text);
 
-  // @NeuSE
-  std::string id_string = inst_to_strID(instruction);
-  graph::AddScalarFeature(node, "id_string", id_string);
+  // @NeuSE: Add associated instructionId to graph
+  graph::AddScalarFeature(node, "inst_id", instructionId);
 
 #if PROGRAML_LLVM_VERSION_MAJOR > 3
   // Add profiling information features, if available.
@@ -332,28 +356,43 @@ Node* ProgramGraphBuilder::AddLlvmInstruction(const ::llvm::Instruction* instruc
 }
 
 Node* ProgramGraphBuilder::AddLlvmVariable(const ::llvm::Instruction* operand,
-                                           const programl::Function* function) {
+                                           const programl::Function* function,
+                                           const std::string instructionId) {
   const LlvmTextComponents text = textEncoder_.Encode(operand);
   Node* node = AddVariable(text.lhs_type, function);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.lhs);
+
+  // @NeuSE: Add associated instructionId to graph
+  graph::AddScalarFeature(node, "op_inst_id", instructionId);
+
   return node;
 }
 
 Node* ProgramGraphBuilder::AddLlvmVariable(const ::llvm::Argument* argument,
-                                           const programl::Function* function) {
+                                           const programl::Function* function,
+                                           const std::string instructionId) {
   const LlvmTextComponents text = textEncoder_.Encode(argument);
   Node* node = AddVariable(text.lhs_type, function);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.lhs);
+
+  // @NeuSE: Add associated instructionId to graph
+  graph::AddScalarFeature(node, "arg_inst_id", instructionId);
+
   return node;
 }
 
-Node* ProgramGraphBuilder::AddLlvmConstant(const ::llvm::Constant* constant) {
+Node* ProgramGraphBuilder::AddLlvmConstant(const ::llvm::Constant* constant,
+                                           const std::string instructionId) {
   const LlvmTextComponents text = textEncoder_.Encode(constant);
   Node* node = AddConstant(text.lhs_type);
   node->set_block(blockCount_);
   graph::AddScalarFeature(node, "full_text", text.text);
+
+  // @NeuSE: Add associated instructionId to graph
+  graph::AddScalarFeature(node, "const_inst_id", instructionId);
+
   return node;
 }
 
@@ -426,10 +465,10 @@ labm8::StatusOr<ProgramGraph> ProgramGraphBuilder::Build(const ::llvm::Module& m
 
   // Create the constants.
   for (const auto& constant : constants_) {
-    Node* constantMessage = AddLlvmConstant(constant.first);
+    Node* constantMessage = AddLlvmConstant(constant.first, constant.second.first);
 
     // Create data in-flow edges.
-    for (auto destination : constant.second) {
+    for (auto destination : constant.second.second) {
       Node* destinationNode = destination.first;
       int32_t position = destination.second;
       RETURN_IF_ERROR(AddDataEdge(position, constantMessage, destinationNode).status());
