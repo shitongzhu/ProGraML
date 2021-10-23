@@ -85,7 +85,7 @@ class ProgramGraphBuilder : public programl::graph::ProgramGraphBuilder {
 
   // NeuSE: Add instructionId for mapping associated instructions to records in KLEE results
   Node* AddLlvmInstruction(const ::llvm::Instruction* instruction, const Function* function,
-                           std::string instructionId);
+                           std::string instructionId, std::string blockEntryExitMark);
   Node* AddLlvmVariable(const ::llvm::Instruction* operand, const Function* function,
                         std::string instructionId);
   Node* AddLlvmVariable(const ::llvm::Argument* argument, const Function* function,

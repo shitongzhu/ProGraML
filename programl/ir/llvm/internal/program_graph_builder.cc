@@ -54,6 +54,7 @@ labm8::StatusOr<BasicBlockEntryExit> ProgramGraphBuilder::VisitBasicBlock(
 
   Node* firstNode = nullptr;
   Node* lastNode = nullptr;
+  int instructionIndex = 0;  // Current index of the instruction in the block.
 
   // Iterate over the instructions of a basic block in-order.
   for (const ::llvm::Instruction& instruction : block) {
@@ -63,7 +64,13 @@ labm8::StatusOr<BasicBlockEntryExit> ProgramGraphBuilder::VisitBasicBlock(
     std::string instructionId = inst_to_strID(&instruction);
 
     // Create the graph node for the instruction.
-    auto instructionMessage = AddLlvmInstruction(&instruction, functionMessage, instructionId);
+    std::string blockEntryExitMark = "";
+    if (instructionIndex == 0)  // First instruction in the block.
+      blockEntryExitMark = "block_entry";
+    if (instructionIndex == block.size() - 1)  // Last instruction in the block.
+      blockEntryExitMark = "block_exit";
+    auto instructionMessage =
+        AddLlvmInstruction(&instruction, functionMessage, instructionId, blockEntryExitMark);
 
     // Record the instruction in the function-level instructions map.
     instructions->insert({&instruction, instructionMessage});
@@ -329,7 +336,8 @@ Status ProgramGraphBuilder::AddCallSite(const Node* source, const FunctionEntryE
 
 Node* ProgramGraphBuilder::AddLlvmInstruction(const ::llvm::Instruction* instruction,
                                               const Function* function,
-                                              const std::string instructionId) {
+                                              const std::string instructionId,
+                                              const std::string blockEntryExitMark) {
   const LlvmTextComponents text = textEncoder_.Encode(instruction);
   Node* node = AddInstruction(text.opcode_name, function);
   node->set_block(blockCount_);
@@ -337,6 +345,11 @@ Node* ProgramGraphBuilder::AddLlvmInstruction(const ::llvm::Instruction* instruc
 
   // @NeuSE: Add associated instructionId to graph
   graph::AddScalarFeature(node, "inst_id", instructionId);
+
+  // @NeuSE: Add block entry/exit mark to graph
+  if (blockEntryExitMark.length() > 0) {
+    graph::AddScalarFeature(node, "block_entry_exit", blockEntryExitMark);
+  }
 
 #if PROGRAML_LLVM_VERSION_MAJOR > 3
   // Add profiling information features, if available.
